@@ -7,8 +7,8 @@
 namespace softcam {
 
 
-const char NamedMutexName[] = "DirectShow Softcam/NamedMutex";
-const char SharedMemoryName[] = "DirectShow Softcam/SharedMemory";
+const char NamedMutexName[] = "Streamfog Cam/NamedMutex";
+const char SharedMemoryName[] = "Streamfog Cam/SharedMemory";
 
 
 struct FrameBuffer::Header
@@ -185,10 +185,27 @@ void FrameBuffer::write(const void* image_bits)
     if (!m_shmem) return;
     std::lock_guard<NamedMutex> lock(m_mutex);
     auto frame = header();
-    std::memcpy(
-            frame->imageData(),
-            image_bits,
-            (std::size_t)3 * frame->m_width * frame->m_height);
+
+    // Get a pointer to the image data
+    uint8_t* frame_data = frame->imageData();
+
+    // Cast the input data to a uint8_t array
+    const uint8_t* input_data = static_cast<const uint8_t*>(image_bits);
+
+    // Calculate the total number of pixels
+    std::size_t total_pixels = frame->m_width * frame->m_height;
+
+    // Iterate over all pixels in parallel
+
+    for (std::size_t i = 0; i < total_pixels; ++i)
+    {
+        // Reorder and copy the RGB components from the input data to the frame data
+        // Input is in RGBA format, output needs to be in BGR
+        frame_data[i * 3]     = input_data[i * 4 + 2]; // Blue
+        frame_data[i * 3 + 1] = input_data[i * 4 + 1]; // Green
+        frame_data[i * 3 + 2] = input_data[i * 4];     // Red
+    }
+
     frame->m_frame_counter += 1;
 }
 

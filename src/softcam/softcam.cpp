@@ -6,6 +6,7 @@
 #include <softcamcore/DShowSoftcam.h>
 #include <softcamcore/SenderAPI.h>
 
+#include <napi.h>
 
 // {AEF3B972-5FA5-4647-9571-358EB472BC9E}
 DEFINE_GUID(CLSID_DShowSoftcam,
@@ -16,7 +17,7 @@ namespace {
 
 // Setup data
 
-const wchar_t FILTER_NAME[] = L"DirectShow Softcam";
+const wchar_t FILTER_NAME[] = L"Streamfog Cam";
 const GUID &FILTER_CLASSID = CLSID_DShowSoftcam;
 
 const AMOVIESETUP_MEDIATYPE s_pin_types[] =
@@ -176,3 +177,82 @@ extern "C" bool     scWaitForConnection(scCamera camera, float timeout)
 {
     return softcam::sender::WaitForConnection(camera, timeout);
 }
+
+Napi::Value ScCreateCamera(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 3) {
+    Napi::TypeError::New(env, "Wrong number of arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  int width = info[0].As<Napi::Number>().Int32Value();
+  int height = info[1].As<Napi::Number>().Int32Value();
+  float framerate = info[2].As<Napi::Number>().FloatValue();
+
+  scCamera* camera = new scCamera(softcam::sender::CreateCamera(width, height, framerate));
+
+  return Napi::External<scCamera>::New(env, camera);
+}
+
+Napi::Value ScDeleteCamera(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1) {
+    Napi::TypeError::New(env, "Wrong number of arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  scCamera* camera = info[0].As<Napi::External<scCamera>>().Data();
+
+  softcam::sender::DeleteCamera(*camera);
+  delete camera;
+
+  return env.Null();
+}
+
+Napi::Value ScSendFrame(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Wrong number of arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  scCamera* camera = info[0].As<Napi::External<scCamera>>().Data();
+  auto buffer = info[1].As<Napi::Buffer<uint8_t>>();
+
+  softcam::sender::SendFrame(*camera, buffer.Data());
+
+  return env.Null();
+}
+
+Napi::Value ScWaitForConnection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 2) {
+    Napi::TypeError::New(env, "Wrong number of arguments")
+        .ThrowAsJavaScriptException();
+    return env.Null();
+  }
+
+  scCamera* camera = info[0].As<Napi::External<scCamera>>().Data();
+  float timeout = info[1].As<Napi::Number>().FloatValue();
+
+  bool isConnected = softcam::sender::WaitForConnection(*camera, timeout);
+
+  return Napi::Boolean::New(env, isConnected);
+}
+
+Napi::Object Init(Napi::Env env, Napi::Object exports) {
+  exports.Set("scCreateCamera", Napi::Function::New(env, ScCreateCamera));
+  exports.Set("scDeleteCamera", Napi::Function::New(env, ScDeleteCamera));
+  exports.Set("scSendFrame", Napi::Function::New(env, ScSendFrame));
+  exports.Set("scWaitForConnection", Napi::Function::New(env, ScWaitForConnection));
+  return exports;
+}
+
+NODE_API_MODULE(NODE_GYP_MODULE_NAME, Init)
