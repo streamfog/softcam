@@ -98,3 +98,6 @@ int WINAPI WinMain(
         return 1;
     }
 }
+int main() {
+    return WinMain(GetModuleHandle(NULL), NULL, GetCommandLineA(), SW_SHOWDEFAULT);
+}
